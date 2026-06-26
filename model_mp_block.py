@@ -9,6 +9,22 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelBlockMPConfig:
+    """
+    Configuration for a mixed-precision GPT model with separate attention/feed-forward/LN formats.
+
+    Args:
+        vocab_size: Number of tokens in the vocabulary.
+        n_embd: Embedding dimension.
+        block_size: Maximum context length.
+        n_head: Number of attention heads.
+        dropout: Dropout probability.
+        n_layer: Number of transformer blocks.
+        attn_layer_format: Precision format used by attention linear projections and matmuls.
+        attn_softmax_format: Precision format used by attention softmax.
+        ffwd_layer_format: Precision format used by the feed-forward MLP.
+        ln_format: Precision format used by LayerNorm layers.
+        name: Experiment name.
+    """
     vocab_size: int
     n_embd: int
     block_size: int
@@ -23,7 +39,7 @@ class ModelBlockMPConfig:
 
 
 class Head(nn.Module):
-
+    """Single attention head for the mixed-precision block experiment."""
     def __init__(self, config: ModelBlockMPConfig, head_size: int):
         super().__init__()
         self.key = qpt.QLinear(config.n_embd, head_size, config.attn_layer_format, False)
@@ -37,16 +53,13 @@ class Head(nn.Module):
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        # x: (B, T, C)
         B, T, C = x.shape
 
-        #QLinear ne supporte que du 2D
         x_flat = x.reshape(B*T, C)
         k = self.key(x_flat).reshape(B, T, -1)
         q = self.query(x_flat).reshape(B, T, -1)
         v = self.value(x_flat).reshape(B, T, -1)
 
-        # Le reste des calculs en 3D
         wei = Q.qmatmul(q, k.transpose(-2, -1), self.attn_layer_format) * (k.shape[-1] ** -0.5)  # (B, T, T)
         wei = wei.masked_fill(self.tril[:T, :T] == 0,float("-inf"))
         wei = Q.qsoftmax(wei, dim=-1,formats=self.attn_softmax_format)
@@ -58,7 +71,7 @@ class Head(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-
+    """Multi-head attention block used in the mixed-precision model."""
     def __init__(self, config: ModelBlockMPConfig, head_size: int):
         super().__init__()
         self.heads = nn.ModuleList(
@@ -77,7 +90,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-
+    """Feed-forward MLP whose precision can differ from attention."""
     def __init__(self, config: ModelBlockMPConfig):
         super().__init__()
         self.net = nn.Sequential(
@@ -95,7 +108,7 @@ class FeedForward(nn.Module):
 
 
 class Block(nn.Module):
-
+    """Transformer block for the mixed-precision GPT model."""
     def __init__(self, config: ModelBlockMPConfig):
         super().__init__()
         head_size = config.n_embd // config.n_head
@@ -111,10 +124,7 @@ class Block(nn.Module):
 
 
 class GPTModelBlockMP(nn.Module):
-    """
-    GPT language model with mixed precision: each component (attention,
-    feed-forward, layer norm) can use a different numerical format.
-    """
+    """GPT model whose attention, feed-forward and LayerNorm use separate precisions."""
 
     def __init__(self, config: ModelBlockMPConfig):
         super().__init__()
