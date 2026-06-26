@@ -3,6 +3,7 @@ from formats import create_layer_format, create_softmax_format, create_LN_format
 from model_up import GPTModelUP, ModelUPConfig
 from model_mp_block import ModelBlockMPConfig, GPTModelBlockMP
 from model_mp_mhsa import ModelMHSAConfig, GPTModelMHSA
+from model_mp_ln import ModelLNMPConfig, GPTModelLNMP
 from model_similarity_mp import ModelSimilarityMPConfig, GPTModelSimilarityMP
 from model_mlp_mp import ModelMLPMPConfig, GPTModelMLPMP
 
@@ -101,6 +102,32 @@ def build_models_mhsa(cfg: dict, checkpoint_state: dict, device: torch.device) -
         )
         models[name] = build_model(GPTModelMHSA, model_config, checkpoint_state, device)
     return models
+
+def build_models_ln(cfg: dict, checkpoint_state: dict, device: torch.device) -> dict:
+
+    experiments = {
+        ("LN_mp_fp8", "fp8", "fp16", 0.1)
+    }
+
+    models = {}
+    for name, ln_low, ln_high, threshold in experiments:
+        model_config = ModelLNMPConfig(
+            vocab_size=cfg["vocab_size"],
+            n_embd=cfg["n_embd"],
+            block_size=cfg["block_size"],
+            n_head=cfg["n_head"],
+            dropout=cfg["dropout"],
+            n_layer=cfg["n_layer"],
+            layer_format=create_layer_format("fp8"),
+            softmax_format=create_softmax_format("fp8"),
+            LN_format=create_LN_format(ln_low),
+            LN_high_format=create_LN_format(ln_high),
+            proximity_threshold=threshold,
+            name=name,
+        )
+        models[name] = build_model(GPTModelLNMP, model_config, checkpoint_state, device)
+    return models
+
 
 def build_models_similarity(cfg: dict, checkpoint_state: dict, device: torch.device) -> dict:
 
