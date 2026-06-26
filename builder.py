@@ -4,6 +4,7 @@ from model_up import GPTModelUP, ModelUPConfig
 from model_mp_block import ModelBlockMPConfig, GPTModelBlockMP
 from model_mp_mhsa import ModelMHSAConfig, GPTModelMHSA
 from model_similarity_mp import ModelSimilarityMPConfig, GPTModelSimilarityMP
+from model_mlp_mp import ModelMLPMPConfig, GPTModelMLPMP
 
 def build_model(model_class, config, checkpoint_state: dict, device: torch.device):
     """Instantiate a model, load weights from checkpoint, move to device."""
@@ -108,7 +109,7 @@ def build_models_similarity(cfg: dict, checkpoint_state: dict, device: torch.dev
     } 
 
     models = {}
-    for name, tau, dtype in experiments:
+    for name, tau in experiments:
         model_config = ModelSimilarityMPConfig(
             vocab_size=cfg["vocab_size"],
             n_embd=cfg["n_embd"],
@@ -126,4 +127,28 @@ def build_models_similarity(cfg: dict, checkpoint_state: dict, device: torch.dev
             name=name
         )
         models[name] = build_model(GPTModelSimilarityMP, model_config, checkpoint_state, device)
+    return models
+
+def build_models_mlp(cfg: dict, checkpoint_state: dict, device: torch.device) -> dict:
+
+    experiments = {
+        ("tau = 0.5", 0.5)
+    }
+    models = {}
+    for name, tau in experiments:
+        model_config = ModelMLPMPConfig(
+            vocab_size=cfg["vocab_size"],
+            n_embd=cfg["n_embd"],
+            block_size=cfg["block_size"],
+            n_head=cfg["n_head"],
+            dropout=cfg["dropout"],
+            n_layer=cfg["n_layer"],
+            layer_format=create_layer_format("fp16"),
+            softmax_format=create_softmax_format("fp16"),
+            LN_format=create_LN_format("fp16"),
+            ffwd_layer_format=create_layer_format("fp16"),
+            tau = tau,
+            name = name
+        )
+        models[name] = build_model(GPTModelMLPMP, model_config, checkpoint_state, device)
     return models

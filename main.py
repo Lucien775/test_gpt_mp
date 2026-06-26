@@ -4,7 +4,7 @@ import torch
 import mptorch.quant as qpt
 
 from error_analyzer import ErrorAnalyzer
-from builder import build_models_uniform, build_models_mixed_block, build_models_mhsa, build_models_similarity
+from builder import build_models_uniform, build_models_mixed_block, build_models_mhsa, build_models_similarity, build_models_mlp
 
 def parse_args():
     parser = argparse.ArgumentParser(description="GPT Shakespeare precision analysis")
@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument("--no-cuda", action="store_true", default=False,
                         help="disables CUDA")
     parser.add_argument("--experiment", type=str, default="uniform",
-                        choices=["uniform", "mixed_block", "mhsa", "similarity"],
+                        choices=["uniform", "mixed_block", "mhsa", "similarity", "mlp"],
                         help="which experiment to run (default: uniform)")
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -41,7 +41,8 @@ EXPERIMENTS = {
     "uniform": (build_models_uniform, "test_results/uniform_precision.csv"),
     "mixed_block":  (build_models_mixed_block,   "test_results/mixed_block_fp8_fp16.csv"),
     "mhsa": (build_models_mhsa, "test_results/mhsa_mp_fp16.csv"),
-    "similarity" : {build_models_similarity, "test_results/similarity_mp.csv"}
+    "similarity" : {build_models_similarity, "test_results/similarity_mp.csv"},
+    "mlp" : {build_models_mlp, "test_results/mlp_mp.csv"}
 }
 
 def main():
