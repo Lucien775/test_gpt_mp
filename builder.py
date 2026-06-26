@@ -1,3 +1,11 @@
+"""
+Helpers to build and instantiate the different GPT precision experiments.
+
+Each builder function creates one or several models based on the checkpoint
+configuration and returns them as a dictionary keyed by experiment name.
+"""
+
+
 import torch
 from formats import create_layer_format, create_softmax_format, create_LN_format
 from model_up import GPTModelUP, ModelUPConfig
@@ -8,7 +16,7 @@ from model_similarity_mp import ModelSimilarityMPConfig, GPTModelSimilarityMP
 from model_mlp_mp import ModelMLPMPConfig, GPTModelMLPMP
 
 def build_model(model_class, config, checkpoint_state: dict, device: torch.device):
-    """Instantiate a model, load weights from checkpoint, move to device."""
+    """Instantiate a model, load checkpoint weights, move it to device and set eval mode."""
     model = model_class(config)
     state = model.state_dict()
     for name in state.keys():
@@ -21,8 +29,15 @@ def build_model(model_class, config, checkpoint_state: dict, device: torch.devic
 
 def build_models_uniform(cfg: dict, checkpoint_state: dict, device: torch.device) -> dict:
     """
-    Three models with the same format applied to every component.
-    cfg: the 'config' dict from the checkpoint.
+    Build a set of models with the same precision for all components.
+
+    Args:
+        cfg: Configuration dictionary from the checkpoint.
+        checkpoint_state: Weight state dictionary from the checkpoint.
+        device: Target device for the created models.
+
+    Returns:
+        dict: Mapping of model names (``fp32``, ``fp16``, ``fp8``) to model instances.
     """
     precisions = ["fp32", "fp16", "fp8"]
     models = {}
@@ -44,18 +59,24 @@ def build_models_uniform(cfg: dict, checkpoint_state: dict, device: torch.device
 
 def build_models_mixed_block(cfg: dict, checkpoint_state: dict, device: torch.device) -> dict:
     """
-    Several models where attention, feed-forward and layer norm can each have
-    a different precision. Add or remove entries to define new combinations.
+    Build models where attention, feed-forward and layer norm use different precisions.
+
+    Args:
+        cfg: Configuration dictionary from the checkpoint.
+        checkpoint_state: Weight state dictionary from the checkpoint.
+        device: Target device for the created models.
+
+    Returns:
+        dict: Mapping of experiment names to instantiated mixed-precision models.
     """
  
     # Define the combinations to compare:
     # each entry is (name, attn, ffwd, ln)
     combinations = [
-        ("attention_fp8","fp16", "fp8", "fp8"),  # attention fp8
-        ("ffwd_fp8",     "fp8", "fp16", "fp8"),  # feedforward fp8
-        ("LN_fp8",       "fp8", "fp8", "fp16")  # Layer Norm fp8
+        ("attention_fp8","fp16", "fp8", "fp8"),  
+        ("ffwd_fp8",     "fp8", "fp16", "fp8"),  
+        ("LN_fp8",       "fp8", "fp8", "fp16")  
     ]
- 
     models = {}
     for name, attn, ffwd, ln in combinations:
         model_config = ModelBlockMPConfig(
@@ -76,13 +97,25 @@ def build_models_mixed_block(cfg: dict, checkpoint_state: dict, device: torch.de
 
 
 def build_models_mhsa(cfg: dict, checkpoint_state: dict, device: torch.device) -> dict:
+    """
+    Build variants focused on the multi-head self-attention sub-block.
 
-    combinations = {
+    Args:
+        cfg: Configuration dictionary from the checkpoint.
+        checkpoint_state: Weight state dictionary from the checkpoint.
+        device: Target device for the created models.
+
+    Returns:
+        dict: Mapping of MHSA experiment names to model instances.
+    """
+    # Define the combinations to compare:
+    # each entry is (name, QKV_format, Q*K^T format, softmax format, format of each head)
+    combinations = [
         ("QKV_fp8",         "fp8", "fp16", "fp16", "fp16"),
         ("attention_fp8",   "fp8", "fp8", "fp16", "fp16"),
         ("softmax_fp8",     "fp8", "fp8", "fp8", "fp16"),
         ("head_fp8",        "fp8", "fp8", "fp8", "fp8")
-    }
+    ]
     models = {}
     for name, QKV, attn, softmax, head in combinations:
         model_config = ModelMHSAConfig(
@@ -104,11 +137,22 @@ def build_models_mhsa(cfg: dict, checkpoint_state: dict, device: torch.device) -
     return models
 
 def build_models_ln(cfg: dict, checkpoint_state: dict, device: torch.device) -> dict:
+    """
+    Build the adaptive LayerNorm experiment using the mixed LayerNorm model.
 
-    experiments = {
+    Args:
+        cfg: Configuration dictionary from the checkpoint.
+        checkpoint_state: Weight state dictionary from the checkpoint.
+        device: Target device for the created models.
+
+    Returns:
+        dict: Mapping of LN experiment names to model instances.
+    """
+    # Define the experiments:
+    # each entry is (name, low format, high format, threshold)
+    experiments = [
         ("LN_mp_fp8", "fp8", "fp16", 0.1)
-    }
-
+    ]
     models = {}
     for name, ln_low, ln_high, threshold in experiments:
         model_config = ModelLNMPConfig(
@@ -130,11 +174,22 @@ def build_models_ln(cfg: dict, checkpoint_state: dict, device: torch.device) -> 
 
 
 def build_models_similarity(cfg: dict, checkpoint_state: dict, device: torch.device) -> dict:
+    """
+    Build experiments for similarity in mixed precision
 
-    experiments = {
+    Args:
+        cfg: Configuration dictionary from the checkpoint.
+        checkpoint_state: Weight state dictionary from the checkpoint.
+        device: Target device for the created models.
+
+    Returns:
+        dict: Mapping of similarity experiment names to model instances.
+    """
+    # Define the experiments:
+    # each entry is (name, tau)
+    experiments = [
         ("tau = 0.5",   0.5)
-    } 
-
+    ]
     models = {}
     for name, tau in experiments:
         model_config = ModelSimilarityMPConfig(
@@ -157,10 +212,22 @@ def build_models_similarity(cfg: dict, checkpoint_state: dict, device: torch.dev
     return models
 
 def build_models_mlp(cfg: dict, checkpoint_state: dict, device: torch.device) -> dict:
+    """
+    Build experiments for MLP in mixed precision
 
-    experiments = {
+    Args:
+        cfg: Configuration dictionary from the checkpoint.
+        checkpoint_state: Weight state dictionary from the checkpoint.
+        device: Target device for the created models.
+
+    Returns:
+        dict: Mapping of MLP experiment names to model instances.
+    """
+    # Define the experiments:
+    # each entry is (name, tau)
+    experiments = [
         ("tau = 0.5", 0.5)
-    }
+    ]
     models = {}
     for name, tau in experiments:
         model_config = ModelMLPMPConfig(
