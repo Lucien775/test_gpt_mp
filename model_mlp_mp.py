@@ -1,3 +1,4 @@
+import copy
 import torch
 import torch.nn as nn
 import mptorch.quant as qpt
@@ -14,9 +15,9 @@ def kappa_phi(v, g, phi):
 
 @dataclass
 class ModelMLPMPConfig:
-	vocab_size: int
-	n_embd: int
-	block_size: int
+    vocab_size: int
+    n_embd: int
+    block_size: int
     n_head: int
     dropout: float
     n_layer: int
@@ -31,7 +32,7 @@ class ModelMLPMPConfig:
 class Head(nn.Module):
     """one head of self-attention"""
 
-    def __init__(self, config: ModelUPConfig, head_size: int):
+    def __init__(self, config: ModelMLPMPConfig, head_size: int):
         super().__init__()
         self.key = qpt.QLinear(config.n_embd, head_size, config.layer_format, False)
         self.query = qpt.QLinear(config.n_embd, head_size, config.layer_format, False)
@@ -69,7 +70,7 @@ class Head(nn.Module):
 class MultiHeadAttention(nn.Module):
     """multiple heads of self-attention in parallel"""
 
-    def __init__(self, config: ModelUPConfig, head_size: int):
+    def __init__(self, config: ModelMLPMPConfig, head_size: int):
         super().__init__()
         self.heads = nn.ModuleList(
             [Head(config, head_size) for _ in range(config.n_head)]
@@ -86,36 +87,34 @@ class MultiHeadAttention(nn.Module):
         return out
 
 class FeedForward(nn.Module):
-    """a simple linear layer followed by a non-linearity"""
-
     def __init__(self, config: ModelMLPMPConfig):
-    	super().__init__()
-    	self.net = nn.Sequential(
-    		qpt.QLinearMP(
-    			config.n_embd,
-    			4 * config.n_embd,
-    			formats=config.ffwd_layer_format,
-    			activation=torch.relu,
-    			d_activation=d_relu,
-    			tol=config.tau,
-    			bias=True,
-    			kappa_phi_f = kappa_phi),
-    		nn.ReLU(),
-    		qpt.QLinearMP(
-    			4 * config.n_embd,
-    			config.n_embd,
-    			formats=config.ffwd_layer_format,
-    			activation=torch.relu,
-    			d_activation=d_relu,
-    			tol=config.tau,
-    			bias=True,
-    			kappa_phi_f = kappa_phi
-    		),
-    		nn.Dropout(dropout)
-    	)
+        super().__init__()
+        self.net = nn.Sequential(
+            qpt.QLinearMP(
+                config.n_embd,
+                4 * config.n_embd,
+                formats=copy.deepcopy(config.ffwd_layer_format),  
+                activation=torch.relu,
+                d_activation=d_relu,
+                tol=config.tau,
+                bias=True,
+                kappa_phi_f=kappa_phi
+            ),
+            nn.ReLU(),
+            qpt.QLinearMP(
+                4 * config.n_embd,
+                config.n_embd,
+                formats=copy.deepcopy(config.ffwd_layer_format),                  activation=torch.relu,
+                d_activation=d_relu,
+                tol=config.tau,
+                bias=True,
+                kappa_phi_f=kappa_phi
+            ),
+            nn.Dropout(config.dropout)
+        )
 
     def forward(self, x):
-    	orig_shape = x.shape
+        orig_shape = x.shape
 
         if x.dim() > 2:
             x = x.reshape(-1, x.shape[-1])

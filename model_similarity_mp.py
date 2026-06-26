@@ -21,65 +21,67 @@ class ModelSimilarityMPConfig:
     softmax_format_low: qpt.QSoftmaxFormats
     softmax_format_high: qpt.QSoftmaxFormats
     tau: float
-    weighted: bool = True
     name: str
+    weighted: bool = True
+
 
 
 class Head(nn.Module):
-	""" one head of self-attention"""
+    """ one head of self-attention"""
 
-	def __init__(self, config: ModelSimilarityMPConfig, head_size: int):
-		super().__init__()
-		self.key = qpt.QLinear(config.n_embd, head_size, config.layer_format, False)
-		self.query = qpt.QLinear(config.n_embd, head_size, config.layer_format, False)
-		self.value = qpt.QLinear(config.n_embd, head_size, config.layer_format, False)
+    def __init__(self, config: ModelSimilarityMPConfig, head_size: int):
+        super().__init__()
+        self.key = qpt.QLinear(config.n_embd, head_size, config.layer_format, False)
+        self.query = qpt.QLinear(config.n_embd, head_size, config.layer_format, False)
+        self.value = qpt.QLinear(config.n_embd, head_size, config.layer_format, False)
 
-		self.register_buffer(
-			"tril", torch.tril(torch.ones(config.block_size, config.block_size))
-		)
-		self.dropout = nn.Dropout(config.dropout)
+        self.register_buffer(
+            "tril", torch.tril(torch.ones(config.block_size, config.block_size))
+        )
+        self.dropout = nn.Dropout(config.dropout)
 
-		self.layer_format = config.layer_format
-		self.matmul_format_low = config.matmul_format_low
-		self.matmul_format_high = config.matmul_format_high
-		self.softmax_format_high = config.softmax_format_high
-		self.softmax_format_low = config.softmax_format_low
-		self.tau = tau
-		self.weighted = config.weighted
+        self.layer_format = config.layer_format
+        self.matmul_format_low = config.matmul_format_low
+        self.matmul_format_high = config.matmul_format_high
+        self.softmax_format_high = config.softmax_format_high
+        self.softmax_format_low = config.softmax_format_low
+        self.tau = config.tau
+        self.weighted = config.weighted
 
-	def forward(self, x):
-		B, T, C = x.shape
-		x_flat = x.reshape(B*T, C)
-		k = self.key(x_flat).reshape(B, T, -1)
-		q = self.query(x_flat).reshape(B, T, -1)
-		v = self.value(x_flat).reshape(B, T, -1)
+    def forward(self, x):
+        B, T, C = x.shape
+        x_flat = x.reshape(B*T, C)
+        k = self.key(x_flat).reshape(B, T, -1)
+        q = self.query(x_flat).reshape(B, T, -1)
+        v = self.value(x_flat).reshape(B, T, -1)
 
-		causal_mask = self.tril[:T, :T]
+        causal_mask = self.tril[:T, :T]
 
-		scores = Q.qmatmul(q, k.transpose(-2, -1), self.matmul_format_low) * k.shape[-1] ** -0.5
-		scores = scores.masked_fill(causal_mask == 0, float("-inf"))
-		att = Q.qsoftmax(scores, dim=-1, formats=self.softmax_format_low)
+        scores = Q.qmatmul(q, k.transpose(-2, -1), self.matmul_format_low) * k.shape[-1] ** -0.5
+        scores = scores.masked_fill(causal_mask == 0, float("-inf"))
+        att = Q.qsoftmax(scores, dim=-1, formats=self.softmax_format_low)
 
-		kappa = 2 * att * (1 - att)
-		if self.weighted:
-			kappa = kappa * torch.abs(scores)
+        kappa = 2 * att * (1 - att)
+        if self.weighted:
+            kappa = kappa * torch.abs(scores)
 
-		kappa = torch.nan_to_num(kappa, nan=0)
-		wei = att.clone()
-		mask = kappa > self.tau
+        kappa = torch.nan_to_num(kappa, nan=0)
+        wei = att.clone()
+        mask = kappa > self.tau
 
-		if torch.any(mask):
-			scores_hp = Q.qmatmul(q, k.transpose(-2,-1), self.matmul_format_high)
-			scores_hp = scores_hp.masked_fill(causal_mask == 0, float("-inf"))
-			att_hp = Q.qsoftmax(scores_hp, dim=-1, formats=self.softmax_format_high)
-
-            wei[mask] = att_hp_requant[mask]
+        if torch.any(mask):
+            scores_hp = Q.qmatmul(q, k.transpose(-2,-1), self.matmul_format_high)
+            scores_hp = scores_hp.masked_fill(causal_mask == 0, float("-inf"))
+            att_hp = Q.qsoftmax(scores_hp, dim=-1, formats=self.softmax_format_high)
+            wei[mask] = att_hp[mask]
             wei = self.layer_format.output_quant(wei)
 
         wei = self.dropout(wei)
 
         out = Q.qmatmul(wei, v, self.layer_format)
         return out
+                       
+
 
 class MultiHeadAttention(nn.Module):
     """multiple heads of self-attention in parallel"""
@@ -183,4 +185,4 @@ class GPTModelSimilarityMP(nn.Module):
 
     
 
-		
+        

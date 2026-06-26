@@ -41,8 +41,8 @@ EXPERIMENTS = {
     "uniform": (build_models_uniform, "test_results/uniform_precision.csv"),
     "mixed_block":  (build_models_mixed_block,   "test_results/mixed_block_fp8_fp16.csv"),
     "mhsa": (build_models_mhsa, "test_results/mhsa_mp_fp16.csv"),
-    "similarity" : {build_models_similarity, "test_results/similarity_mp.csv"},
-    "mlp" : {build_models_mlp, "test_results/mlp_mp.csv"}
+    "similarity" : (build_models_similarity, "test_results/similarity_mp.csv"),
+    "mlp" : (build_models_mlp, "test_results/mlp_mp.csv")
 }
 
 def main():
