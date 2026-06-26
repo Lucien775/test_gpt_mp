@@ -9,6 +9,24 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelMHSAConfig:
+    """
+    Configuration for a GPT model where attention sub-operations can use different formats.
+
+    Args:
+        vocab_size: Number of tokens in the vocabulary.
+        n_embd: Embedding dimension.
+        block_size: Maximum context length.
+        n_head: Number of attention heads.
+        dropout: Dropout probability.
+        n_layer: Number of transformer blocks.
+        QKV_format: Format of the query/key/value projections.
+        attention_format: Format used by the attention matmul.
+        softmax_format: Format used by the softmax step.
+        head_format: Format used by the head projection.
+        layer_format: Format used by the final projection and feed-forward layers.
+        LN_format: Format used by LayerNorm layers.
+        name: Experiment name.
+    """
     vocab_size: int
     n_embd: int
     block_size: int
@@ -25,7 +43,7 @@ class ModelMHSAConfig:
 
 
 class Head(nn.Module):
-    """one head of self-attention"""
+    """Single self-attention head with separate QKV and attention formats."""
 
     def __init__(self, config: ModelMHSAConfig, head_size: int):
         super().__init__()
@@ -55,7 +73,7 @@ class Head(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-
+    """Multi-head attention block for the MHSA experiment."""
     def __init__(self, config: ModelMHSAConfig):
         super().__init__()
         head_size = config.n_embd // config.n_head
@@ -73,7 +91,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-
+    """Feed-forward block for the MHSA model."""
     def __init__(self, config: ModelMHSAConfig):
         super().__init__()
         self.net = nn.Sequential(
@@ -91,7 +109,7 @@ class FeedForward(nn.Module):
 
 
 class Block(nn.Module):
-
+    """Transformer block for the MHSA model."""
     def __init__(self, config: ModelMHSAConfig):
         super().__init__()
         self.sa = MultiHeadAttention(config)
@@ -106,6 +124,7 @@ class Block(nn.Module):
 
 
 class GPTModelMHSA(nn.Module):
+    """GPT model whose attention path is split into separate precision-controlled sub-operations."""
     def __init__(self, config: ModelMHSAConfig):
         super().__init__()
         self.block_size = config.block_size
