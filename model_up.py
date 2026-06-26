@@ -12,6 +12,21 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelUPConfig:
+    """
+    Configuration for a uniform-precision GPT model.
+
+    Args:
+        vocab_size: Number of tokens in the vocabulary.
+        n_embd: Embedding dimension.
+        block_size: Maximum context length.
+        n_head: Number of attention heads.
+        dropout: Dropout probability applied in the model.
+        n_layer: Number of transformer blocks.
+        layer_format: Precision format for linear layers and matmul operations.
+        softmax_format: Precision format used by the softmax operation.
+        LN_format: Precision format used by LayerNorm layers.
+        name: Experiment name.
+    """
     vocab_size: int
     n_embd: int
     block_size: int
@@ -115,9 +130,7 @@ class Block(nn.Module):
         return x
     
 class GPTModelUP(nn.Module):
-    """
-    GPT Language Model with uniform precision
-    """
+    """GPT language model with a single precision format applied everywhere."""
 
     def __init__(self, config: ModelUPConfig):
         super().__init__()
