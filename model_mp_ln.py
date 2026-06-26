@@ -9,6 +9,23 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelLNMPConfig:
+    """
+    Configuration for the adaptive LayerNorm mixed-precision experiment.
+
+    Args:
+        vocab_size: Number of tokens in the vocabulary.
+        n_embd: Embedding dimension.
+        block_size: Maximum context length.
+        n_head: Number of attention heads.
+        dropout: Dropout probability.
+        n_layer: Number of transformer blocks.
+        layer_format: Precision used by linear layers and matmuls.
+        softmax_format: Precision used by softmax.
+        LN_format: Low-precision format used by LayerNorm.
+        LN_high_format: Higher-precision format used for selected values.
+        proximity_threshold: Threshold for deciding whether a value uses the high-precision path.
+        name: Experiment name.
+    """
     vocab_size: int
     n_embd: int
     block_size: int
@@ -24,7 +41,12 @@ class ModelLNMPConfig:
 
 
 class MPLayerNorm(qpt.QLayerNorm):
-    """LayerNorm mixte adaptative inspiré de test_LN_mp.py."""
+    """
+    Adaptive mixed-precision LayerNorm.
+
+    The layer uses a low-precision path by default and switches to a higher-
+    precision normalization path for values close to the mean.
+    """
 
     def __init__(
         self,
@@ -74,7 +96,7 @@ class MPLayerNorm(qpt.QLayerNorm):
         return out
 
 class Head(nn.Module):
-    """one head of self-attention"""
+    """Single attention head used by the adaptive LayerNorm experiment."""
 
     def __init__(self, config: ModelLNMPConfig, head_size: int):
         super().__init__()
@@ -103,7 +125,7 @@ class Head(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-
+    """Multi-head attention block for the adaptive LayerNorm experiment."""
     def __init__(self, config: ModelLNMPConfig, head_size: int):
         super().__init__()
         self.heads = nn.ModuleList([Head(config, head_size) for _ in range(config.n_head)])
@@ -120,7 +142,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-
+    """Feed-forward MLP used in the adaptive LayerNorm experiment."""
     def __init__(self, config: ModelLNMPConfig):
         super().__init__()
         self.net = nn.Sequential(
@@ -138,7 +160,7 @@ class FeedForward(nn.Module):
 
 
 class Block(nn.Module):
-
+    """Transformer block using adaptive LayerNorm."""
     def __init__(self, config: ModelLNMPConfig):
         super().__init__()
         head_size = config.n_embd // config.n_head
@@ -164,7 +186,7 @@ class Block(nn.Module):
 
 
 class GPTModelLNMP(nn.Module):
-
+    """GPT model with adaptive LayerNorm mixed precision."""
     def __init__(self, config: ModelLNMPConfig):
         super().__init__()
         self.block_size = config.block_size
