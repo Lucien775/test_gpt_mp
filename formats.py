@@ -69,7 +69,7 @@ def create_layer_format(dtype: Literal['fp32','fp16', 'fp8']):
 # Softmax format
 def create_softmax_format(dtype: Literal['fp32','fp16', 'fp8']):
     r"""
-    Create softmax format config usingn QSoftmaxFormat
+    Create softmax format config using QSoftmaxFormat
     Args:
         dtype:
             format of the layer, fp32, fp16(e5m10) or fp8 (e4m3)
