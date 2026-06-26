@@ -8,13 +8,49 @@ from torch.nn import functional as F
 from dataclasses import dataclass
 
 def d_relu(x):
+    """
+    Return the derivative of the ReLU activation element-wise.
+
+    Args:
+        x: Input tensor.
+
+    Returns:
+        Tensor with 1 where x is positive and 0 otherwise.
+    """
     return (x >= torch.zeros_like(x)) * torch.ones_like(x)
 
 def kappa_phi(v, g, phi):
+    """kappa_phi used by the mixed-precision MLP layer for Relu activation.
+
+    Args:
+        v: Value tensor.
+        g: Gradient-like tensor (unused in this simple implementation).
+        phi: Additional parameter (unused in this simple implementation).
+
+    Returns:
+        A tensor of ones with the same shape as v.
+    """
     return (v >= torch.zeros_like(v)) * torch.ones_like(v)
 
 @dataclass
 class ModelMLPMPConfig:
+    """
+    Configuration for the mixed-precision MLP-based GPT experiment.
+
+    Args:
+        vocab_size: Number of tokens in the vocabulary.
+        n_embd: Embedding dimension.
+        block_size: Maximum context length.
+        n_head: Number of attention heads.
+        dropout: Dropout probability.
+        n_layer: Number of transformer blocks.
+        layer_format: Precision for attention projection and output layers.
+        softmax_format: Precision for the attention softmax.
+        LN_format: Precision for LayerNorm layers.
+        ffwd_layer_format: Low precision for the mixed-precision feed-forward layer.
+        tau: Threshold used by the MLP precision policy.
+        name: Experiment name.
+    """
     vocab_size: int
     n_embd: int
     block_size: int
@@ -30,7 +66,7 @@ class ModelMLPMPConfig:
 
 
 class Head(nn.Module):
-    """one head of self-attention"""
+    """Single attention head for the MLP mixed-precision experiment."""
 
     def __init__(self, config: ModelMLPMPConfig, head_size: int):
         super().__init__()
@@ -46,16 +82,13 @@ class Head(nn.Module):
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        # x: (B, T, C)
         B, T, C = x.shape
 
-        #QLinear ne supporte que du 2D
         x_flat = x.reshape(B*T, C)
         k = self.key(x_flat).reshape(B, T, -1)
         q = self.query(x_flat).reshape(B, T, -1)
         v = self.value(x_flat).reshape(B, T, -1)
 
-        # Le reste des calculs en 3D
         wei = Q.qmatmul(q, k.transpose(-2, -1), self.layer_format) * (k.shape[-1] ** -0.5)  # (B, T, T)
 
         wei = wei.masked_fill(self.tril[:T, :T] == 0,float("-inf"))
@@ -68,7 +101,7 @@ class Head(nn.Module):
         return out
 
 class MultiHeadAttention(nn.Module):
-    """multiple heads of self-attention in parallel"""
+    """Parallel multi-head attention block for the MLP experiment."""
 
     def __init__(self, config: ModelMLPMPConfig, head_size: int):
         super().__init__()
@@ -87,6 +120,7 @@ class MultiHeadAttention(nn.Module):
         return out
 
 class FeedForward(nn.Module):
+    """Feed-forward block using the mixed-precision MLP layer."""
     def __init__(self, config: ModelMLPMPConfig):
         super().__init__()
         self.net = nn.Sequential(
@@ -104,7 +138,8 @@ class FeedForward(nn.Module):
             qpt.QLinearMP(
                 4 * config.n_embd,
                 config.n_embd,
-                formats=copy.deepcopy(config.ffwd_layer_format),                  activation=torch.relu,
+                formats=copy.deepcopy(config.ffwd_layer_format),                  
+                activation=torch.relu,
                 d_activation=d_relu,
                 tol=config.tau,
                 bias=True,
@@ -128,7 +163,7 @@ class FeedForward(nn.Module):
 
 
 class Block(nn.Module):
-    """Transformer block: communication followed by computation"""
+    """Transformer block for the mixed-precision MLP experiment."""
 
     def __init__(self, config: ModelMLPMPConfig):
         super().__init__()
@@ -144,10 +179,7 @@ class Block(nn.Module):
         return x
     
 class GPTModelMLPMP(nn.Module):
-    """
-    GPT Language Model with uniform precision
-    """
-
+    """GPT model using a mixed-precision MLP feed-forward layer."""
     def __init__(self, config: ModelMLPMPConfig):
         super().__init__()
         self.block_size = config.block_size
