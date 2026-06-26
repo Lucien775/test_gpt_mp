@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from tqdm import tqdm
+from typing import Literal
 
 
 class ErrorAnalyzer:
@@ -24,7 +25,6 @@ class ErrorAnalyzer:
         batch_size: number of sequences per batch
         device:     torch device
     """
-
     def __init__(
         self,
         models: dict[str, nn.Module],
@@ -51,8 +51,16 @@ class ErrorAnalyzer:
         self.train_data = data[:n]
         self.val_data = data[n:]
 
-    def get_batch(self, split: str):
-        """Return a random batch from 'train' or 'val' split."""
+    def get_batch(self, split: Literal["train", "val"]):
+        """
+        Return a random training or validation batch.
+
+        Args:
+            split: Either ``"train"`` or ``"val"``.
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]: Input sequence batch and target batch.
+        """
         data = self.train_data if split == "train" else self.val_data
         ix = torch.randint(len(data) - self.block_size, (self.batch_size,))
         x = torch.stack([data[i: i + self.block_size] for i in ix])
@@ -61,13 +69,14 @@ class ErrorAnalyzer:
 
     def compare(self, num_batches: int = 500, split: str = "val") -> dict:
         """
-        Run forward passes for every model and collect losses.
+        Run forward passes for each model and collect average losses.
+
+        Args:
+            num_batches: Number of batches to evaluate.
+            split: Which data split to use, either ``"train"`` or ``"val"``.
 
         Returns:
-            {
-                'model_name': {'losses': [...], 'avg_loss': float},
-                ...
-            }
+            dict: Mapping of model names to ``{"losses": [...], "avg_loss": float}``.
         """
         results = {name: {"losses": []} for name in self.models}
 
@@ -84,7 +93,13 @@ class ErrorAnalyzer:
         return results
 
     def save_results(self, results: dict, output_path: str):
-        """Save compare() results to a CSV file."""
+        """
+        Write the evaluation metrics to a CSV file.
+
+        Args:
+            results: Dictionary returned by ``compare()``.
+            output_path: Destination CSV path.
+        """
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
         with open(output_path, "w", newline="") as f:
             writer = csv.writer(f)
