@@ -1,3 +1,10 @@
+"""
+CLI entry point for comparing GPT precision experiments.
+
+This script loads a pretrained checkpoint, selects an experiment, builds the
+corresponding models, evaluates them on text batches, and writes the averages
+into a CSV file.
+"""
 import argparse
 import torch
 
@@ -5,6 +12,14 @@ from error_analyzer import ErrorAnalyzer
 from builder import build_models_uniform, build_models_mixed_block, build_models_mhsa, build_models_ln, build_models_similarity, build_models_mlp
 
 def parse_args():
+    """
+    Parse CLI arguments for choosing the experiment and evaluation settings.
+
+    Returns:
+        argparse.Namespace: Parsed options with fields such as model_path,
+            data_path, batch_size, num_batches, output, seed, no_cuda and
+            experiment.
+    """
     parser = argparse.ArgumentParser(description="GPT Shakespeare precision analysis")
     parser.add_argument("--model_path", type=str, default="../script_test/gpt_shakespeare.pt",
                         help="path to the trained model checkpoint")
@@ -28,13 +43,33 @@ def parse_args():
     return args
 
 def get_device(args) -> torch.device:
+    """
+    Return the torch device selected for the current run.
+
+    Args:
+        args: Parsed CLI arguments, including the ``cuda`` flag.
+
+    Returns:
+        torch.device: ``cuda`` when available and enabled, otherwise ``cpu``.
+    """
     return torch.device("cuda" if args.cuda else "cpu")
 
 
 def load_checkpoint(model_path: str, device: torch.device) -> dict:
+    """
+    Load the checkpoint dictionary from disk and map tensors to the target device.
+
+    Args:
+        model_path: Path to the ``.pt`` checkpoint file.
+        device: Target device for the returned tensors.
+
+    Returns:
+        dict: The checkpoint content containing config, model weights and text mappings.
+    """
     return torch.load(model_path, map_location=device)
 
-
+# Registry of available experiments. Each entry points to a builder function
+# and a default CSV filename used for the results.
 EXPERIMENTS = {
     "uniform": (build_models_uniform, "test_results/uniform_precision.csv"),
     "mixed_block":  (build_models_mixed_block,   "test_results/mixed_block_fp8_fp16.csv"),
