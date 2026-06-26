@@ -8,6 +8,25 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelSimilarityMPConfig:
+    """Configuration for the similarity mixed-precision attention experiment.
+
+    Args:
+        vocab_size: Number of tokens in the vocabulary.
+        n_embd: Embedding dimension.
+        block_size: Maximum context length.
+        n_head: Number of attention heads.
+        dropout: Dropout probability.
+        n_layer: Number of transformer blocks.
+        layer_format: Default precision for the output projection.
+        LN_format: Precision used by LayerNorm layers.
+        matmul_format_low: Low-precision format used for the initial attention scores.
+        matmul_format_high: Higher-precision format used for selected scores.
+        softmax_format_low: Softmax precision for the low-precision path.
+        softmax_format_high: Softmax precision for the high-precision path.
+        tau: Threshold above which the high-precision attention path is used.
+        name: Experiment name.
+        weighted: Whether the similarity-based selection uses weighted scores.
+    """
     vocab_size: int
     n_embd: int
     block_size: int
@@ -27,7 +46,7 @@ class ModelSimilarityMPConfig:
 
 
 class Head(nn.Module):
-    """ one head of self-attention"""
+    """One attention head using a similarity-based mixed-precision policy."""
 
     def __init__(self, config: ModelSimilarityMPConfig, head_size: int):
         super().__init__()
@@ -84,7 +103,7 @@ class Head(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    """multiple heads of self-attention in parallel"""
+    """Parallel multi-head attention block for the similarity experiment."""
 
     def __init__(self, config: ModelSimilarityMPConfig, head_size: int):
         super().__init__()
@@ -137,9 +156,7 @@ class Block(nn.Module):
         return x
 
 class GPTModelSimilarityMP(nn.Module):
-    """
-    GPT Language Model with similarity in mixed precision
-    """
+    """GPT model using a similarity mixed-precision attention strategy."""
 
     def __init__(self, config: ModelSimilarityMPConfig):
         super().__init__()
